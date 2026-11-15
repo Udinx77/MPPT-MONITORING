@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MPPT Monitoring Dashboard</title>
+
+<style>
+    :root {
+        --bg: #0b0e14;
+        --panel: #131822;
+        --card: #161c27;
+        --border: #262e3d;
+        --border-hi: #3a4559;
+        --text: #e6e9ef;
+        --text-dim: #8a94a6;
+        --cyan: #22d3ee;
+        --green: #4ade80;
+        --amber: #fbbf24;
+        --red: #f87171;
+        --accent: #60a5fa;
+        --accent2: #a78bfa;
+    }
+    * { box-sizing: border-box; }
+
+    body {
+        margin: 0;
+        font-family: "Segoe UI", Inter, Arial, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+    }
+
+    .header {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background: rgba(19, 24, 34, .94);
+        border-bottom: 1px solid var(--border);
+        padding: 14px 24px;
+    }
+    .header h1 { margin: 0; font-size: 20px; }
+    .sub { margin-top: 4px; color: var(--text-dim); font-size: 12px; }
+
+    .wrap { padding: 18px 24px 40px; max-width: 1600px; margin: 0 auto; }
+
+    /* ---------- detail + grafik ---------- */
+    .panel {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 16px;
+    }
+    .chart-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+    }
+    .chart-head h2 { margin: 0; font-size: 15px; }
+    .detail-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+        gap: 8px;
+        margin-bottom: 14px;
+    }
+    .stat {
+        background: #0f141d;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 8px 10px;
+        min-width: 0;
+    }
+    .stat-label { font-size: 11px; color: var(--text-dim); }
+    .stat-value {
+        font-size: 15px;
+        font-weight: 700;
+        margin-top: 2px;
+        font-variant-numeric: tabular-nums;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .stat.wide { grid-column: 1 / -1; }
+    .chart-legend {
+        display: flex;
+        gap: 16px;
+        font-size: 12px;
+        color: var(--text-dim);
+        margin-top: 8px;
+    }
+    .chart-legend span { display: inline-flex; align-items: center; gap: 6px; }
+    .chart-legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+
+    /* ---------- section + kartu ---------- */
+    .section-head { display: flex; align-items: center; gap: 10px; margin: 24px 0 12px; }
+    .section-head h2 { margin: 0; font-size: 12px; letter-spacing: .12em; color: var(--text-dim); font-weight: 700; }
+    .count {
+        background: #1d2431;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        padding: 1px 10px;
+        font-size: 12px;
+        font-weight: 700;
+    }
+    .section-head .line { flex: 1; height: 1px; background: var(--border); }
+
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+
+    .dev-card {
+        position: relative;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 11px 12px 11px 19px;
+        cursor: pointer;
+        overflow: hidden;
+        transition: border-color .15s;
+    }
+    .dev-card:hover { border-color: var(--border-hi); }
+    .dev-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .dev-card .strip { position: absolute; left: 0; top: 0; bottom: 0; width: 7px; background: #3a4252; }
+    .dev-card.sev-amber { background: #1f1c12; border-color: #5b4a1d; }
+    .dev-card.sev-amber .strip { background: #a47d1d; }
+    .dev-card.sev-red { background: #241519; border-color: #5c2830; }
+    .dev-card.sev-red .strip { background: #a6404b; }
+    .dev-card.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+
+    .dev-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; background: var(--green); box-shadow: 0 0 6px var(--green); }
+    .sev-amber .dot { background: var(--amber); box-shadow: 0 0 6px var(--amber); }
+    .sev-red .dot { background: var(--red); box-shadow: 0 0 6px var(--red); }
+    .dev-name { font-weight: 700; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .dev-mid, .dev-bot {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 8px;
+        margin-top: 7px;
+    }
+    .dev-meta { color: var(--cyan); font-weight: 700; font-size: 13px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .rto { color: var(--red); font-weight: 700; font-size: 13px; white-space: nowrap; }
+    .dev-pct { font-weight: 800; font-size: 16px; font-variant-numeric: tabular-nums; }
+    .dev-ip { color: var(--text-dim); font-size: 12px; }
+    .dev-bat { color: var(--text-dim); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+    .c-green { color: var(--green); }
+    .c-yellow { color: var(--amber); }
+    .c-red { color: var(--red); }
+    .dim { color: var(--text-dim); }
+
+    .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 7px; }
+    .chip { font-size: 11px; font-weight: 700; border-radius: 6px; padding: 1px 6px; border: 1px solid currentColor; }
+
+    .gauge { position: relative; height: 6px; border-radius: 3px; background: #2a3242; margin-top: 9px; overflow: hidden; }
+    .gauge i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; }
+    .gauge b { position: absolute; left: 25%; top: 0; bottom: 0; width: 2px; background: rgba(255, 255, 255, .35); }
+    .f-green { background: var(--green); }
+    .f-yellow { background: var(--amber); }
+    .f-red { background: var(--red); }
+
+    .empty { color: var(--text-dim); font-size: 13px; padding: 8px 2px; }
+    .no-data { color: var(--text-dim); }
+
+    .status-error { color: var(--red); font-weight: 700; }
+    .status-warn { color: var(--amber); font-weight: 700; }
+
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+    .blink { animation: blink 1s ease-in-out infinite; }
+    @media (prefers-reduced-motion: reduce) { .blink { animation: none; } }
+
+    @media (max-width: 800px) {
+        .wrap { padding: 14px; }
+        .header { padding: 12px 14px; }
+    }
+</style>
+</head>
+
+<body>
+
+<div class="header">
+    <h1>MPPT Monitoring Dashboard</h1>
+    <div class="sub">
+        Refresh otomatis tiap 1 menit · Last polling: <span id="pollingTime">-</span>
+        · Diperbarui: <span id="lastUpdate">-</span>
+    </div>
+</div>
+
+<div class="wrap">
+
+    <div class="panel">
+        <div class="chart-head">
+            <h2>Detail — <span id="chartDeviceName">-</span></h2>
+            <div id="chartBattNow">-</div>
+        </div>
+        <div class="detail-stats" id="detailStats"></div>
+        <div id="historyChart"><span class="no-data">Pilih device di bawah untuk lihat grafik 24 jam.</span></div>
+        <div class="chart-legend">
+            <span><i style="background:var(--accent)"></i>Battery Voltage</span>
+            <span><i style="background:var(--accent2)"></i>Array Voltage</span>
+            <span id="historyInfo"></span>
+        </div>
+    </div>
+
+    <div class="section-head">
+        <h2>NEED CHECK</h2><span class="count" id="needCount">0</span><span class="line"></span>
+    </div>
+    <div class="grid" id="gridNeed"></div>
+
+    <div class="section-head">
+        <h2>NORMAL</h2><span class="count" id="normalCount">0</span><span class="line"></span>
+    </div>
+    <div class="grid" id="gridNormal"><div class="empty">Loading...</div></div>
+
+</div>
+
+<script>
+const REFRESH_MS = 60_000;
+let latestData = [];
+let selectedDevice = null;
+
+const esc = value => String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+
+const fmt = (value, digits = 2, unit = "") =>
+    value == null ? "-" : `${Number(value).toFixed(digits)}${unit}`;
+
+const fmtTs = ts => ts ? ts.slice(5, 16).replace("T", " ") : "";
+
+// "ADT-MPPT-FMS-01" -> "FMS-01" (nama lengkap tetap ada di tooltip kartu)
+const shortName = name => String(name).replace(/^ADT-MPPT-/, "");
+
+// ---------- persentase battery ----------
+// Perkiraan linear Voltage -> %SoC (kurva asli lead-acid non-linear, ini cuma
+// approksimasi buat tampilan) -- sesuaikan 2 angka ini kalau nominal/kapasitas
+// battery bank beda. 20V dipilih = titik "merah" (kritis) yang udah dipakai,
+// 28V = full/absorption khas bank 24V.
+const BATTERY_V_EMPTY = 20.0;  // -> 0%
+const BATTERY_V_FULL = 28.0;   // -> 100%
+
+function batteryPercent(v) {
+    if (v == null) return null;
+    const pct = ((v - BATTERY_V_EMPTY) / (BATTERY_V_FULL - BATTERY_V_EMPTY)) * 100;
+    return Math.max(0, Math.min(100, pct));
+}
+
+// Threshold voltage (merah <20V, kuning 20-22V, hijau >22V)
+const BAND_COLOR = { red: "#f87171", yellow: "#fbbf24", green: "#4ade80" };
+function voltageBand(v) {
+    if (v == null) return null;
+    if (v < 20) return "red";
+    if (v <= 22) return "yellow";
+    return "green";
+}
+
+// ---------- ambang suhu ----------
+// Morningstar gak publish angka resmi buat TriStar spesifik.
+// Yang ketemu: whitepaper GenStar MPPT (produk lain, arsitektur mirip) mulai
+// derate di 80°C, pause charging 90°C, shutdown 95°C -- dipinjem sbg acuan
+// terdekat buat heatsink. TriStar sendiri cuma nyebut "rated up to 45°C
+// ambient". Sesuaikan angka2 ini kalau ada datasheet lebih spesifik.
+const HEATSINK_WARN = 60;  // >= kuning
+const HEATSINK_HOT = 80;   // >= merah (mulai derate menurut whitepaper GenStar)
+const AMBIENT_COLD = 0;    // <= merah (risiko beku)
+const AMBIENT_HOT = 45;    // >= merah (di luar rating ambient TriStar 45°C)
+
+function heatsinkBand(v) {
+    if (v == null) return null;
+    if (v >= HEATSINK_HOT) return "red";
+    if (v >= HEATSINK_WARN) return "yellow";
+    return "green";
+}
+
+function ambientBand(v) {
+    if (v == null) return null;
+    if (v <= AMBIENT_COLD || v >= AMBIENT_HOT) return "red";
+    if (v <= AMBIENT_COLD + 5 || v >= AMBIENT_HOT - 5) return "yellow";
+    return "green";
+}
+
+// ---------- kedip (fase acak per elemen, biar gak kedip bareng) ----------
+const blinkCls = on => on ? " blink" : "";
+const blinkSt = on => on ? ` style="animation-delay:${Math.random().toFixed(2)}s"` : "";
+
+function tempCell(v, band) {
+    if (v == null) return '<span class="no-data">-</span>';
+    const on = band === "red" || band === "yellow";
+    const cls = band === "red" ? "status-error" : band === "yellow" ? "status-warn" : "";
+    return `<span class="${cls}${blinkCls(on)}"${blinkSt(on)}>${v.toFixed(1)} °C</span>`;
+}
+
+// ---------- status kartu ----------
+// 3 = merah (ERROR / voltage <20V / suhu merah), 2 = kuning (voltage 20-22V), 0 = normal.
+// Suhu kuning cuma munculin chip kedip di kartu, gak masuk NEED CHECK.
+function deviceSeverity(x) {
+    if (x.status !== "OK") return 3;
+    const vb = voltageBand(x.battery_voltage);
+    if (vb === "red"
+        || heatsinkBand(x.temp_heatsink) === "red"
+        || ambientBand(x.temp_rts) === "red"
+        || ambientBand(x.temp_battery) === "red") return 3;
+    return vb === "yellow" ? 2 : 0;
+}
+const SEV_CLASS = { 0: "", 2: "sev-amber", 3: "sev-red" };
+
+// RTO = sudah berapa lama sejak pembacaan OK terakhir: "2m", "1j41m", "2h5j"
+function rtoText(lastOk) {
+    if (!lastOk) return "RTO: --";
+    const mins = Math.floor((Date.now() - new Date(lastOk).getTime()) / 60000);
+    if (Number.isNaN(mins)) return "RTO: --";
+    const m = Math.max(0, mins);
+    const d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60);
+    if (d) return `RTO: ${d}h${h}j`;
+    if (h) return `RTO: ${h}j${m % 60}m`;
+    return `RTO: ${m}m`;
+}
+
+function tempChips(x) {
+    return [
+        ["HS", x.temp_heatsink, heatsinkBand(x.temp_heatsink)],
+        ["RTS", x.temp_rts, ambientBand(x.temp_rts)],
+        ["BATT", x.temp_battery, ambientBand(x.temp_battery)],
+    ]
+        .filter(([, , band]) => band === "red" || band === "yellow")
+        .map(([label, v, band]) =>
+            `<span class="chip ${band === "red" ? "c-red" : "c-yellow"} blink"${blinkSt(true)}>${label} ${v.toFixed(0)}°C</span>`)
+        .join("");
+}
+
+function cardHTML(x) {
+    const sev = deviceSeverity(x);
+    const ok = x.status === "OK";
+    const pct = ok ? batteryPercent(x.battery_voltage) : null;
+    const band = ok ? voltageBand(x.battery_voltage) : null;
+    const vBlink = band === "red" || band === "yellow";
+    const bandCls = band ? `c-${band}` : "dim";
+
+    const left = ok
+        ? `<span class="dev-meta">${x.array_voltage == null ? "ARR --" : `ARR ${x.array_voltage.toFixed(1)}V`}</span>`
+        : `<span class="rto blink"${blinkSt(true)}>${esc(rtoText(x.last_ok))}</span>`;
+
+    const pctText = pct == null ? "--" : `${Math.round(pct)}%`;
+    const batText = x.battery_voltage == null || !ok ? "BAT --" : `BAT ${x.battery_voltage.toFixed(1)}V`;
+    const chips = ok ? tempChips(x) : "";
+    const gauge = pct == null
+        ? '<div class="gauge"><b></b></div>'
+        : `<div class="gauge"><i class="f-${band}" style="width:${pct.toFixed(0)}%"></i><b></b></div>`;
+
+    return `
+        <div class="dev-card ${SEV_CLASS[sev]}${x.device_name === selectedDevice ? " selected" : ""}"
+             role="button" tabindex="0" data-device="${esc(x.device_name)}" title="${esc(x.device_name)}">
+            <span class="strip"></span>
+            <div class="dev-top">
+                <span class="dot${blinkCls(sev > 0)}"${blinkSt(sev > 0)}></span>
+                <span class="dev-name">${esc(shortName(x.device_name))}</span>
+            </div>
+            <div class="dev-mid">
+                ${left}
+                <span class="dev-pct ${bandCls}${blinkCls(vBlink)}"${blinkSt(vBlink)}>${pctText}</span>
+            </div>
+            <div class="dev-bot">
+                <span class="dev-ip">${esc(x.ip)}</span>
+                <span class="dev-bat ${vBlink ? bandCls : ""}${blinkCls(vBlink)}"${blinkSt(vBlink)}>${batText}</span>
+            </div>
+            ${chips ? `<div class="chips">${chips}</div>` : ""}
+            ${gauge}
+        </div>`;
+}
+
+const byName = (a, b) =>
+    shortName(a.x.device_name).localeCompare(shortName(b.x.device_name), undefined, { numeric: true });
+
+function renderLatest() {
+    const items = latestData.map(x => ({ x, sev: deviceSeverity(x) }));
+    const need = items.filter(i => i.sev >= 2).sort((a, b) => b.sev - a.sev || byName(a, b));
+    const normal = items.filter(i => i.sev < 2).sort(byName);
+
+    document.getElementById("needCount").textContent = need.length;
+    document.getElementById("normalCount").textContent = normal.length;
+    document.getElementById("gridNeed").innerHTML =
+        need.length ? need.map(i => cardHTML(i.x)).join("") : '<div class="empty">Tidak ada device yang perlu dicek.</div>';
+    document.getElementById("gridNormal").innerHTML =
+        normal.length ? normal.map(i => cardHTML(i.x)).join("") : '<div class="empty">Belum ada data. Pastikan collect_voltage.py sudah jalan.</div>';
+
+    const last = latestData.map(x => x.timestamp).filter(Boolean).sort().pop();
+    document.getElementById("pollingTime").textContent = last ? fmtTs(last) : "-";
+    document.getElementById("lastUpdate").textContent = new Date().toLocaleString("id-ID");
+
+    // default: device paling butuh dicek (atau pertama), biar panel detail langsung kebuka
+    if (!selectedDevice || !latestData.some(x => x.device_name === selectedDevice)) {
+        const first = need[0] || normal[0];
+        selectedDevice = first ? first.x.device_name : null;
+        document.querySelectorAll(".dev-card").forEach(c =>
+            c.classList.toggle("selected", c.dataset.device === selectedDevice));
+    }
+    renderDetail();
+}
+
+function renderDetail() {
+    const x = latestData.find(d => d.device_name === selectedDevice);
+    document.getElementById("chartDeviceName").textContent = x ? x.device_name : "-";
+    if (!x) {
+        document.getElementById("detailStats").innerHTML = "";
+        return;
+    }
+
+    const ok = x.status === "OK";
+    const tile = (label, valueHtml, wide = false) =>
+        `<div class="stat${wide ? " wide" : ""}"><div class="stat-label">${label}</div><div class="stat-value">${valueHtml}</div></div>`;
+
+    document.getElementById("detailStats").innerHTML = [
+        tile("Status", ok ? '<span class="c-green">OK</span>'
+            : `<span class="status-error blink"${blinkSt(true)}>ERROR</span>`),
+        tile("Battery", fmt(x.battery_voltage, 2, " V")),
+        tile("Array", fmt(x.array_voltage, 2, " V")),
+        tile("Heatsink", tempCell(x.temp_heatsink, heatsinkBand(x.temp_heatsink))),
+        tile("RTS Temp", tempCell(x.temp_rts, ambientBand(x.temp_rts))),
+        tile("Battery Temp", tempCell(x.temp_battery, ambientBand(x.temp_battery))),
+        tile("Output Power", fmt(x.output_power, 1, " W")),
+        tile("Charge State", esc(x.charge_state_name || "-")),
+        tile("Timestamp", esc(fmtTs(x.timestamp))),
+        x.error ? tile("Error", esc(x.error), true) : "",
+    ].join("");
+}
+
+async function loadLatest() {
+    try {
+        const res = await fetch("/api/latest", { cache: "no-store" });
+        const json = await res.json();
+
+        if (!json.success) {
+            throw new Error(json.error || "API error");
+        }
+
+        latestData = json.data || [];
+        renderLatest();
+    } catch (err) {
+        console.error(err);
+        document.getElementById("gridNormal").innerHTML =
+            `<div class="empty">API error: ${esc(err.message)}</div>`;
+    }
+}
+
+// ---------- grafik riwayat 24 jam ----------
+function historySVG(rows) {
+    const w = 900, h = 220, pad = 34;
+    if (!rows.length) return '<span class="no-data">Belum ada data histori.</span>';
+    const vals = rows.flatMap(r => [r.battery_voltage, r.array_voltage]).filter(v => v != null && Number.isFinite(v));
+    if (vals.length < 2) return '<span class="no-data">Belum ada pembacaan voltage yang valid di rentang waktu ini.</span>';
+    const min = Math.min(...vals), max = Math.max(...vals);
+    const range = (max - min) || 1;
+    const stepX = rows.length > 1 ? (w - pad * 2) / (rows.length - 1) : 0;
+    const line = (key, color) => {
+        const pts = rows.map((r, i) => r[key] == null ? null : [pad + i * stepX, h - pad - ((r[key] - min) / range) * (h - pad * 2)]).filter(Boolean);
+        if (pts.length < 2) return "";
+        const path = pts.map((p, i) => (i === 0 ? "M" : "L") + p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ");
+        return `<path d="${path}" fill="none" stroke="${color}" stroke-width="2"/>`;
+    };
+    return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:220px;">
+        <line x1="${pad}" y1="${h - pad}" x2="${w - pad}" y2="${h - pad}" stroke="var(--border)"/>
+        ${line("battery_voltage", "var(--accent)")}
+        ${line("array_voltage", "var(--accent2)")}
+        <text x="4" y="16" fill="var(--text-dim)" font-size="11">${max.toFixed(2)}V</text>
+        <text x="4" y="${h - pad + 4}" fill="var(--text-dim)" font-size="11">${min.toFixed(2)}V</text>
+        <text x="${pad}" y="${h - 8}" fill="var(--text-dim)" font-size="10">${fmtTs(rows[0].timestamp)}</text>
+        <text x="${w - pad - 90}" y="${h - 8}" fill="var(--text-dim)" font-size="10">${fmtTs(rows[rows.length - 1].timestamp)}</text>
+    </svg>`;
+}
+
+async function loadHistory() {
+    const device = selectedDevice;
+    if (!device) return;
+
+    try {
+        const url = `/api/history?device=${encodeURIComponent(device)}&hours=24`;
+        const res = await fetch(url, { cache: "no-store" });
+        const json = await res.json();
+
+        if (!json.success) {
+            throw new Error(json.error || "History API error");
+        }
+
+        // user bisa klik device lain selama fetch jalan -- abaikan hasil yang udah basi
+        if (device !== selectedDevice) return;
+
+        document.getElementById("historyInfo").textContent = `${json.data.length} records / 24 jam`;
+        document.getElementById("historyChart").innerHTML = historySVG(json.data);
+
+        const lastValid = [...json.data].reverse().find(r => r.battery_voltage != null);
+        const pct = lastValid ? batteryPercent(lastValid.battery_voltage) : null;
+        document.getElementById("chartBattNow").innerHTML = pct == null
+            ? '<span class="no-data">-</span>'
+            : `<b style="font-size:22px;color:${BAND_COLOR[voltageBand(lastValid.battery_voltage)]}">${Math.round(pct)}%</b>`;
+    } catch (err) {
+        console.error(err);
+        document.getElementById("historyInfo").textContent = err.message;
+    }
+}
+
+function selectDevice(name) {
+    selectedDevice = name;
+    document.querySelectorAll(".dev-card").forEach(c =>
+        c.classList.toggle("selected", c.dataset.device === name));
+    renderDetail();
+    loadHistory();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+// klik / Enter / Spasi di kartu mana pun (event delegation, kartu di-render ulang tiap refresh)
+const wrap = document.querySelector(".wrap");
+wrap.addEventListener("click", e => {
+    const card = e.target.closest(".dev-card");
+    if (card) selectDevice(card.dataset.device);
+});
+wrap.addEventListener("keydown", e => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const card = e.target.closest(".dev-card");
+    if (card) {
+        e.preventDefault();
+        selectDevice(card.dataset.device);
+    }
+});
+
+// kartu + grafik device terpilih refresh bareng tiap menit
+async function refreshAll() {
+    await loadLatest();
+    await loadHistory();
+}
+
+refreshAll();
+setInterval(refreshAll, REFRESH_MS);
+</script>
+
+</body>
+</html>
